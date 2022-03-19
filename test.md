@@ -3,3 +3,4 @@ dev4
 dev5
 rebase 冲突测试aaaa
 造成冲突
+merge 冲突测试
