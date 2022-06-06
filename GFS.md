@@ -91,3 +91,6 @@ chunk的复制，每个chunk都被复制到不同机架的不同机器上，用�
 
 ### 数据完整性
 每个 Chunk 服务器都使用 Checksum 来检查保存的数据是否损坏
+
+
+<img alt="GFS-817aaf2d.png" src="assets/GFS-817aaf2d.png" width="" height="" >
