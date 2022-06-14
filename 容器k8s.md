@@ -1,0 +1,161 @@
+## docker
+### 容器的启动原理过程
+- 启用 Linux Namespace 配置；
+- 设置指定的 Cgroups 参数；
+- 切换进程的根目录（Change Root）
+
+### 联合挂载(UnionFS) p8
+[挂载的原理：实际上是inode的替换过程，/home挂载到/test，其实是将/test目录的dentry重定向到/home的inode，所以，更改test其实是更改/home]
+也就是docker的分层原理
+
+* 也就是说，容器可以一分为二的看待
+1. 一组联合挂载的rootfs，也就是挂载在/var/lib/docker/32fdbc686/diff下面的
+2. 一个由namespace和cgroup构成的隔离环境，这部分我们成为容器运行时
+
+
+## k8s
+k8s:网关、水平扩展、监控、备份、灾难恢复
+ 
+### 为什么要使用pod P13
+- 这样一个场景：一个组件是一个进程组，比如rsyslogd，他需要三个进程，imklog imuxsock 和他的主进程，这三个必须在同一个节点，当不使用pod，在swarm调度时，调度两个之后发现第三个资源不够，则会启动失败，而用一个pod，里面有三个continer，则直接会选资源够的节点
+- 再比如一个web应用需要war和tomcat，可以用init container来copy war包，然后tomcat容器启动
+
+* pod只是一个逻辑概念，真正处理的是namespace和cgroup，pod本质上是共享了某些资源的容器，pod的实现有个中间容器Infra容器，在Infra 创建了一个network namespace后，用户容器就可以加入到里面来，于是，
+同一个pod的容器有一下特性：
+1. 直接可以使用localhost通信
+2. 一个pod只有一个ip就是那个networknamespace的ip
+3. pod的生命周期与Infra一致，与其他容器无关
+
+* 以上这种特性是istio实现的一个基础:
+` network namespace共享，可以在sidecar容器里面修改网络配置，接管流量，而不用管业务容器`
+` 解耦`
+
+### 深入理解pod镜像 P14 P15
+那些参数是pod级别的：调度、网络、存储，以及安全相关的属性，基本上是 Pod 级别的
+
+```
+apiVersion: v1
+kind: Pod
+...
+spec:
+ nodeSelector:
+   disktype: ssd
+```
+* 这样的配置意味着pod只能被调度到disktype:ssd标签的节点上，否则调度失败
+```
+spec:
+  hostAliases:
+  - ip: "10.1.2.3"
+    hostnames:
+    - "foo.remote"
+    - "bar.remote"
+```
+* HostAliases：定义了 Pod 的 hosts 文件（比如 /etc/hosts）里的内容
+
+```spec:
+  shareProcessNamespace: true
+  containers:
+  - name: nginx
+    image: nginx
+```
+* shareProcessNamespace: true 意味着共享PID namespace
+
+* 凡是 Pod 中的容器要共享宿主机的 Namespace，也一定是 Pod 级别的定义 
+
+* ImagePullPolicy 镜像拉去策略 默认是always
+
+ ``` containers:
+  - name: lifecycle-demo-container
+    image: nginx
+    lifecycle:
+      postStart:
+        exec:
+          command: ["/bin/sh", "-c", "echo Hello from the postStart handler > /usr/share/message"]
+      preStop:
+        exec:
+          command: ["/usr/sbin/nginx","-s","quit"]
+```
+
+*  lifecycle生命周期，在容器启动之前或者之后加入一些操作，例如初始化，优雅退出等
+
+#### pod的几种状态
+1. pending 调度不成功，可能是资源，或者其他
+2. unknown 意味着kubelet不能持续汇报状态给api-server，可能是master与kubelet通信问题
+3. running 已经创建成功调度成功，但有可能无法提供服务，可能问题
+    - 代码问题，出现500了
+    - 程序死循环
+    - 服务不是容器的主启动进程
+    - 资源问题，进程卡死了
+
+#### project volume
+- Secret；
+- ConfigMap；
+- Downward API；
+- ServiceAccountToken
+```
+spec:
+  containers:
+  - name: test-secret-volume
+    image: busybox
+    args:
+    - sleep
+    - "86400"
+    volumeMounts:
+    - name: mysql-cred
+      mountPath: "/projected-volume"
+      readOnly: true
+volumes:
+  - name: mysql-cred
+    projected:
+      sources:
+      - secret:
+          name: user
+      - secret:
+          name: pass
+```
+* 这样容器的用户名密码就以文件的形式被挂载到/projected-volume目录下，如果修改，则会自动更新，由k8s维护
+#### Service Account 服务账户
+[当需要在容器里装一个k8sclient，首先要搞定认证问题]
+#### 探针Probe
+```
+spec:
+  containers:
+  - name: liveness
+    image: busybox
+    args:
+    - /bin/sh
+    - -c
+    - touch /tmp/healthy; sleep 30; rm -rf /tmp/healthy; sleep 600
+    livenessProbe:
+      exec:
+        command:
+        - cat
+        - /tmp/healthy
+      initialDelaySeconds: 5 #启动5s后开始执行
+      periodSeconds: 5 #每5s执行一次
+```
+* 也可以使用tcp或者http探针
+```
+livenessProbe:
+     httpGet:
+       path: /healthz
+       port: 8080
+       httpHeaders:
+       - name: X-Custom-Header
+         value: Awesome
+       initialDelaySeconds: 3
+       periodSeconds: 3
+```
+```
+livenessProbe:
+      tcpSocket:
+        port: 8080
+      initialDelaySeconds: 15
+      periodSeconds: 20
+```
+
+### 控制器模式 P16
+k8s项目pkg/controller目录下包含所有的控制器对象，他们都采用一种通用的编排模式，即[控制循环(control-loop)]
+deployment controller 会通过kubelet上报的信息，进行调谐，也就是循环检测期望状态和实际状态
+
+
