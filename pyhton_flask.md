@@ -20,3 +20,12 @@ _G_COMMIT是个全局变量，当时写这段代码的初衷是想过滤掉重�
 1. 在web服务里，针对java，一个请求进来会创建一个线程，
 2. 成员变量在请求进来时会被初始化，当请求返回，所创建的对象就会被回收
 3. 当页面返回了数据，与程序的交互就完成了，再次请求会另创建一个线程
+
+for root, dirs, files in os.walk('.'):
+        for i in files:
+            full_path = os.path.join(os.getcwd(),i)
+            if tarfile.is_tarfile(full_path):
+              tar_obj = tarfile.open(full_path,mode='r')
+                file = tar_obj.extractfile('nginx-1.20.2/src/stream/ngx_stream_limit_conn_module.c')
+                for j in file:
+                    print(j.strip())
