@@ -1,3 +1,50 @@
+### gitlab架构
+Consul 服务发现
+Gitaly 用于处理所有的git调用，rpc请求
+Puma 处理web接口和api调用的请求
+Sidekiq 后台作业处理器
+
+
+
+### gitlab配置
+vim /etc/gitlab/gitlab.rb
+
+   external_url 'http://172.16.12.1:8082'
+   unicorn['listen'] = '127.0.0.1'
+   unicorn[''port'] = 8082
+   nginx['listen_addresses'] = ['*']
+   nginx['listen_port'] = 82
+
+vim /var/opt/gitlab/gitlab-rails/etc/gitlab.yml
+   host: 172.16.12.1
+   port: 82
+
+ vim /var/opt/gitlab/gitlab-rails/etc/puma.rb
+   bind 'tcp://127.0.0.1:8082'
+
+vim /var/opt/gitlab/nginx/conf/gitlab-http.conf
+   server {
+	#listen *:80;
+	listen *:82;
+   server_name 172.16.12.1;
+ vim /var/opt/gitlab/gitlab-shell/config.yml
+   gitlab_url: "http://127.0.0.1:8082"
+
+gitlab-ctl reconfigure (切记在这一步执行完之后会将puma.rb和config.yml文件重置，，需要再按上面修改，否则会报502)
+   #重新启动
+   gitlab-ctl restart
+ 数据存储目录
+   /data1/gitlab-data
+
+   主备同步脚本
+   gitdata_sync.sh
+
+   主备同步完成后需要修改一处配置否则无法启动(报502)
+  vim /var/opt/gitlab/gitlab-shell/config.yml
+   gitlab_url: "http://127.0.0.1:8082"
+   
+
+
 ### git碰到的问题记录
 1. git rebase branchname 与 git merge branchname
 rebase 会把当前分支基于origin的修改作为一个补丁，应用到要合并的分支上，比如：
@@ -43,6 +90,8 @@ merge 再修改完冲突后得提交一次，作为解决冲突的提交，
 
  5. 如果之前的两次提交已经push到了远端，则压缩之后无法直接push，会被拒绝，因为你压缩之后你的commit在远端的commit之前了，这时你如果确定你修改的没问题了，可以使用
   git push -f -u origin <分支名>
+
+
 
 
 
