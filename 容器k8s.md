@@ -158,4 +158,30 @@ livenessProbe:
 k8s项目pkg/controller目录下包含所有的控制器对象，他们都采用一种通用的编排模式，即[控制循环(control-loop)]
 deployment controller 会通过kubelet上报的信息，进行调谐，也就是循环检测期望状态和实际状态
 
+### 作业副本与水平扩展
+deployment控制器实际操纵的，是replicaset对象，而不是pod对象
+* 在滚动更新的过程中，由deployment控制replicaset，在由replicaset通过自己的控制器replicaset controller来保证
+
+* 查看版本历史
+kubectl rollout history deployment/nginx-deployment
+
+* 查看滚动更新的状态变化
+kubectl rollout status deployment/nginx-deployment
+
+* 设置deployment镜像
+kubectl set image deployment/nginx-deployment nginx=nginx:1.91
+
+* 回滚到上一个版本
+kubectl rollout undo deployment/nginx-deployment
+
+* 回滚到某个版本
+kubectl rollout undo deployment/nginx-deployment --to-reversion=2 
+
+- 这样更新会使每次更新都生成一个replicaset，有些多余，因此，k8s提供了多次更新只生成一个replicaset的指令
+
+1. 先"暂停"更新，让kubectl进入暂停状态，
+kubectl rollout pause deployment/nginx-deployment 
+2. 在修改完成后，使用resume指令
+kubectl rollout resume deployment/nginx-deployment
+3. Deployment 对象有一个字段，叫作 spec.revisionHistoryLimit 控制replicaset数量
 

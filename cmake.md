@@ -61,7 +61,7 @@ ADD_LIBRARY(libname [SHARED|STATIC|MODULE]
  source1 source2 ... sourceN)
 
 如果需要生成名字相同的动态库和静态库，那么上述指令则无法实现，需要在使用一个新的指令
-### SET_TARGET_PROPERTIES 设置生成库的一些属性
+### SET_TARGET_PROPERTIES
 SET_TARGET_PROPERTIES(target1 target2 ...
  PROPERTIES prop1 value1
  prop2 value2 ...)
@@ -88,26 +88,23 @@ INCLUDE_DIRECTORIES([AFTER|BEFORE] [SYSTEM] dir1 dir2 ...)
  将添加的头文件搜索路径放在已有路径的前面。
  ２，通过 AFTER 或者 BEFORE 参数，也可以控制是追加还是置前。
 
-### LINK_DIRECTORIES
+ ### LINK_DIRECTORIES
  TARGET_LINK_LIBRARIES(target library1
  <debug | optimized> library2
  ...)
  这个指令非常简单，添加非标准的共享库搜索路径，比如，
  在工程内部同时存在共享库和可 执行二进制，在编译时就需要指定一下这些共享库的路径
 
-### TARGET_LINK_LIBRARIES
+ ### TARGET_LINK_LIBRARIES
  TARGET_LINK_LIBRARIES(target library1
  <debug | optimized> library2
  ...)
  该指令可以为target添加需要链接的共享库，例子中是一个可执行文件，同样可以
 
 
-## target_include_directories
-为target添加需要链接的头文件
- target_include_directories(hwserver PRIVATE ${ZeroMQ_INCLUDE_DIRS})
 
 
-## 编写自己的cmake模块
+ ## 编写自己的cmake模块
  cmake模块目的:找到library文件，找到库文件
  主工程目录下：
 #PROJECT(HELLO)
@@ -139,61 +136,3 @@ IF(HELLO_FOUND)
  INCLUDE_DIRECTORIES(${HELLO_INCLUDE_DIR})  #找头文件  就是.h文件
  TARGET_LINK_LIBRARIES(hello ${HELLO_LIBRARY}) #把libhello.so链接到hello
 ENDIF(HELLO_FOUND)
-
-
-### 条件判断
-if(USE_LIBRARY)
- ...
-else()
- ...
-endif()
-
-### option()
-可以通过用户传入改变编译行为，接收三个参数
-option(<option_variable> "help string" [initial value])
-
-
-
-### target_compile_options
-target_compile_options(compute-areas
-  PRIVATE
-    "-fPIC"
-  )
-
-  为compute-areas可执行目标设置了编译选项
-  *PRIVATE*，编译选项会应用于给定的目标，不会传递给与目标相关的目标。我们的示例中， 即使compute-areas将链接到geometry库，compute-areas也不会继承geometry目标上设置的编译器选项。
-  *INTERFACE*，给定的编译选项将只应用于指定目标，并传递给与目标相关的目标。
-  *PUBLIC*，编译选项将应用于指定目标和使用它的目标。
-
-
-  * 目标属性的可见性CMake的核心，我们将在本书中经常讨论这个话题。以这种方式添加编译选项，不会影响全局CMake变量CMAKE_CXX_FLAGS，并能更细粒度控制在哪些目标上使用哪些选项。
-
-
-##  FIND_LIBRARY和ADD_LIBRARY和TARGET_LINK_LIBRARIES
-find 是查找库，add是创建库，target是为某个目标链接库
-
-
-## file
-file(GLOB <variable>
-     [LIST_DIRECTORIES true|false] [RELATIVE <path>] [CONFIGURE_DEPENDS]
-     [<globbing-expressions>...])
-
-生成匹配<globbing-expressions>的文件列表并把它存储在<variable>中
-例子：FILE(GLOB SRC_FILES "*.cpp" .)
-* 在.也就是当前路径下将匹配*.cpp的文件存储在SRC_FILES变量中
-
-
-### execute_process
-从CMake中执行任意进程，并检索它们的输出。
-
-### add_custom_target
-创建执行自定义命令的目标。
-
-### add_custom_command
-指定必须执行的命令，以生成文件或在其他目标的特定生成事件中生成。
-
-## 单元测试
-### 简单的单元测试
-enable_testing()，测试这个目录和所有子文件夹(因为我们把它放在主CMakeLists.txt)。
-
-add_test()，定义了一个新的测试，并设置测试名称和运行命令。
