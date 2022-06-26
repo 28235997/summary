@@ -178,3 +178,6 @@ awk '{print substr($4, 2,11)  " " $1}' access.log | sort | uniq | awk '{uv[$1]++
 
 * 防火墙开启某个端口
 iptables -I INPUT -ptcp --dport 3000 -j ACCEPT
+
+* 字符串替换
+sed -i 's/^\(字符串段1\).*\(字符串段2\)$/\1放入替换段1与段2之间的内容\2/' filename
