@@ -185,3 +185,8 @@ kubectl rollout pause deployment/nginx-deployment
 kubectl rollout resume deployment/nginx-deployment
 3. Deployment 对象有一个字段，叫作 spec.revisionHistoryLimit 控制replicaset数量
 
+### statefulset
+1. statefulSet的控制器直接管理的是pod
+2. k8s通过Headless Service，为这些有编号的Pod，在DNS服务器中生成带有同样编号的DNS记录
+3. StatefulSet还为每一个pod分配并创建一个同样编号的PVC
+
