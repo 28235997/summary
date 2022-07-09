@@ -25,7 +25,7 @@ net.ipv4.tcp_max_tw_buckets = 5000 #
 ### 配置
 [根块中配置]
 #### user nobody 
-设置用master启动后，fork出的worker进程运行在那个用户下 
+设置用master启动后，fork出的worker进程运行在那个用户下 ，默认是nobody，但是使用nobody之后则无法进行写磁盘操作 
 #### include /usr/share/nginx/modules/*.conf;
 把其他配置文件嵌入进来
 #### worker_processes auto；
@@ -37,12 +37,15 @@ worker_processes 4;
 worker_cpu_affinity 1000 0100 0010 0001;
 ```
 #### worker_priority 0(-20--19)
-和内核分配的时间片有关，越小优先级越高，时间片越长，worker优先级配置，内核进程是5，尽量不要比内核进程还小
+和内核分配的时间片有关，越小优先级越高，时间片越长，worker优先级配置，内核进程是5，尽量不要比内核进程还小 [建议-10] 因为它需要有极高的优先权
 [event块中的配置]
 #### use poll|epoll|select
 选择的事件处理模型
 #### worker_connections number
 每个worker处理最大连接数
+
+### error_log
+设置错误日志级别和路径，一般放到单独挂载的盘，error_log /var/log/error_log info;
 
 * [http]
 #### http块的基本结构
@@ -145,6 +148,8 @@ http包头会有Content-Length字段，当用户试图上传一个10GB的文件�
 sendfile on|off;
 默认： sendfile on;
 启用sendfile系统调用，减少两次内核态到用户态的内存拷贝，提高发送文件效率
+#### tcp_nopush on
+打开之后 将会在发送响应时把整个响应报头放在一个TCP包中发送
 
 
 #### ignore_invalid_headers on|off   [http,server]块中
@@ -182,4 +187,94 @@ server {
 
 ### 反向代理基本配置
 proxy_pass基本配置
+location /test/v1/ { 
+ #替换 URL 的代理方式： /test/v1/ 会被替换为/abc/ 
+ #如 /test/v1/xxx?a=1 到达后端就会变为 /abc/xxx?a=1 
+ proxy_pass http://127.0.0.1:81/abc/; 
+} 
+location /aaa/ { 
+ #替换 URL 的代理方式，和上面的/test/v1/功能一样，只是替换成了"/" 
+ #刚开始使用代理时 常常会和下面 /abc 的代理混淆
+ proxy_pass http://127.0.0.1:81/; 
+} 
+location /abc { 
+ #什么都不会改变，直接传递原始的 URL 
+ proxy_pass http://127.0.0.1:81; 
+}
+
+### upstream使用手册
+
+
+
+## nginx内置变量
+$arg_name 指 URL 请求中的参数，name 是参数的名字
+$args 代表 URL 中所有请求的参数
+$binary_remote_addr 客户端地址以二进制数据的形式出现，通常会和限速模块一起使用
+$body_bytes_sent 发送给客户端的字节数，不包含响应头
+$bytes_sent 发送给客户端的总字节数
+$document_uri 设置$uri 的别名
+$hostname 运行 Nginx 的服务器名
+$http_referer 表示请求是从哪个页面链接过来的
+$http_user_agent 客户端浏览器的相关信息
+$remote_addr 客户端 IP 地址
+$remote_port 客户端端口号
+$remote_user 客户端用户名，通常在 Auth Basic 模块中使用
+$request_filename 请求的文件路径，基于 root alias 指令和 URI 请求生成
+$request_time 请求被 Nginx 接收后，一直到响应数据返回给客户端所用的时间
+$request_uri 请求的 URI，带参数
+$request 记录请求的 URL 和 HTTP 
+$request_length 请求的长度，包括请求行、请求头和请求正文
+$server_name 虚拟主机的 server_name 的值，通常是域名
+$server_port 服务器端口号
+$server_addr 服务器的 IP 地址
+$request_method 请求的方式，如 POST 或 GET 
+$scheme 请求协议，如 HTTP 或 HTTPS 
+$sent_http_name 任意响应头，name 为响应头的名字，注意 name 要小写
+$realip_remote_addr 保留原来的客户地址，在 real_ip 模块中使用
+$server_protocol 请求采用的协议名称和版本号，常为 HTTP/1.0 或 HTTP/1.1 
+$uri 当前请求的 URI，在请求过程中 URI 可能会被改变，例如在内部重定向或使用索引文件时
+$nginx_version Nginx 的版本号
+$pid worker 进程的 PID 
+$pipe 如果请求是 HTTP 流水线（pipelined）发送的，pipe 值为"p"，否则为"." 
+$connection_requests 当前通过一个连接获得的请求数量
+$cookie_name name 即 Cookie 的名字，可得到 Cookie 的信息
+$status HTTP 请求状态
+$msec 日志写入时间。单位为秒，精度是毫秒
+$time_local 在通用日志格式下的本地时间
+$upstream_addr 请求反向代理到后端服务器的 IP 地址
+$upstream_port 请求反向代理到后端服务器的端口号
+$upstream_response_time 请求在后端服务器消耗的时间
+$upstream_status 请求在后端服务器的 HTTP 响应状态
+$geoip_city 城市名称，在 geoip 模块中使用
+
+
+
+
+### 常见内置变量实战
+$arg_name
+```
+location ／ { 
+ if ($arg_at= ‘5') { 
+ proxy_pass http://b; 
+ } 
+ proxy_pass http://a; 
+}
+```
+* 默认到http://a,参数at=5则到b
+
+* $uri 和$request_uri
+uri是执行完一系列重定向最后到后端服务器的url(不包含$arg参数)，
+request_uri 记录原始的url(包含arg参数) 不重定向，去掉参数和$uri一样
+
+## 强化基础配置 
+### 获取真实ip
+一般ip会在$remote_addr中，但是一般公司生产环境会和CDN打交道，请求先到CDN代理才到nginx，所以需要安装 
+--with-http_realip_module模块，
+
+### 减少后端的网络开销
+有许多请求之和url有关，和请求头和请求体无关，则可以禁用掉
+- proxy_pass_request_body：确定是否向后端服务器发送 HTTP 请求体，支持配置的环境有 http、server、location。 
+- proxy_pass_request_headers：确定是否向后端服务器发送 HTTP 请求头，支持的配置的环境有 http、server、location。
+
+
 
