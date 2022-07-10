@@ -206,6 +206,9 @@ location /abc {
 
 
 
+### rewrite使用手册
+
+
 ## nginx内置变量
 $arg_name 指 URL 请求中的参数，name 是参数的名字
 $args 代表 URL 中所有请求的参数
