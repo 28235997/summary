@@ -190,3 +190,51 @@ kubectl rollout resume deployment/nginx-deployment
 2. k8s通过Headless Service，为这些有编号的Pod，在DNS服务器中生成带有同样编号的DNS记录
 3. StatefulSet还为每一个pod分配并创建一个同样编号的PVC
 
+
+## 声明式API，CRD  P24
+CRD，custom Resource Definition 
+### 写一个CRD
+先定义一个CRD的yaml文件，名字叫network.yaml
+```
+
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  name: networks.samplecrd.k8s.io
+spec:
+  group: samplecrd.k8s.io
+  version: v1
+  names:
+    kind: Network
+    plural: networks
+  scope: Namespaced   #定义属于namespace 类似pod对象
+ 
+```
+
+## PV,PVC,SC
+```
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nfs
+spec:
+  storageClassName: manual
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteMany
+  nfs:
+    server: 10.244.1.4
+    path: "/"
+```
+定义一个PV，pvc通常由开发人员创建，或者作为statefulset模板的一部分，由statefuleset控制器创建
+
+### storageclass
+但是100个pvc就需要100个pv，那么手动创建太麻烦，于是有了 sc
+手动创建pv被称为static Provisioning 静态供应
+sc被称为Dynamic Provisioning动态供应
+* 关键是这个字段：provisioner: ceph.rook.io/block 
+
+### PV持久化宿主机目录的两阶段操作
+1. 为虚拟机挂载远程磁盘，attach操作
+2. 将远程磁盘挂载到宿主机目录的操作，mount操作
