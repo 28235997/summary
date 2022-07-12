@@ -238,3 +238,47 @@ sc被称为Dynamic Provisioning动态供应
 ### PV持久化宿主机目录的两阶段操作
 1. 为虚拟机挂载远程磁盘，attach操作
 2. 将远程磁盘挂载到宿主机目录的操作，mount操作
+
+
+
+### 自定义控制器CRD
+```
+func main() {
+	flag.Parse()
+
+	// set up signals so we handle the first shutdown signal gracefully
+	stopCh := signals.SetupSignalHandler()
+
+	cfg, err := clientcmd.BuildConfigFromFlags(masterURL, kubeconfig)
+	if err != nil {
+		glog.Fatalf("Error building kubeconfig: %s", err.Error())
+	}
+
+	kubeClient, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		glog.Fatalf("Error building kubernetes clientset: %s", err.Error())
+	}
+
+	networkClient, err := clientset.NewForConfig(cfg)
+	if err != nil {
+		glog.Fatalf("Error building example clientset: %s", err.Error())
+	}
+
+	networkInformerFactory := informers.NewSharedInformerFactory(networkClient, time.Second*30)
+
+	controller := NewController(kubeClient, networkClient,
+		networkInformerFactory.Samplecrd().V1().Networks())
+
+	go networkInformerFactory.Start(stopCh)
+
+	if err = controller.Run(2, stopCh); err != nil {
+		glog.Fatalf("Error running controller: %s", err.Error())
+	}
+}
+
+func init() {
+	flag.StringVar(&kubeconfig, "kubeconfig", "", "Path to a kubeconfig. Only required if out-of-cluster.")
+	flag.StringVar(&masterURL, "master", "", "The address of the Kubernetes API server. Overrides any value in kubeconfig. Only required if out-of-cluster.")
+}
+```
+network CRD的main方法
