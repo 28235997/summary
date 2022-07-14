@@ -282,3 +282,42 @@ func init() {
 }
 ```
 network CRD的main方法
+
+```
+func NewController(
+  kubeclientset kubernetes.Interface,
+  networkclientset clientset.Interface,
+  networkInformer informers.NetworkInformer) *Controller {
+  ...
+  controller := &Controller{
+    kubeclientset:    kubeclientset,
+    networkclientset: networkclientset,
+    networksLister:   networkInformer.Lister(),
+    networksSynced:   networkInformer.Informer().HasSynced,
+    workqueue:        workqueue.NewNamedRateLimitingQueue(...,  "Networks"),
+    ...
+  }
+    networkInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+    AddFunc: controller.enqueueNetwork,
+    UpdateFunc: func(old, new interface{}) {
+      oldNetwork := old.(*samplecrdv1.Network)
+      newNetwork := new.(*samplecrdv1.Network)
+      if oldNetwork.ResourceVersion == newNetwork.ResourceVersion {
+        return
+      }
+      controller.enqueueNetwork(new)
+    },
+    DeleteFunc: controller.enqueueNetworkForDelete,
+ return controller
+}
+```
+
+#### informer
+自定义控制器的重要组件 informer，是一个带有本地缓存和索引机制的、可以注册 EventHandler 的 client，这里的EnventHandler包括delete，update，add
+
+informer通过ListAndWatch ，获取和监视变化
+
+手动实现一个crd
+
+### operator
+operator=CRD+controller+webhook

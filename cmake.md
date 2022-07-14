@@ -101,8 +101,18 @@ INCLUDE_DIRECTORIES([AFTER|BEFORE] [SYSTEM] dir1 dir2 ...)
  ...)
  该指令可以为target添加需要链接的共享库，例子中是一个可执行文件，同样可以
 
+### add_dependencies
 
 
+
+## 打开测试
+#打开测试功能
+enable_testing()
+#增加单元测试
+add_test(
+  NAME python_test_long
+  COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test.py --executable $<TARGET_FILE:sum>
+  )
 
  ## 编写自己的cmake模块
  cmake模块目的:找到library文件，找到库文件
@@ -136,3 +146,73 @@ IF(HELLO_FOUND)
  INCLUDE_DIRECTORIES(${HELLO_INCLUDE_DIR})  #找头文件  就是.h文件
  TARGET_LINK_LIBRARIES(hello ${HELLO_LIBRARY}) #把libhello.so链接到hello
 ENDIF(HELLO_FOUND)
+
+
+### add_custom_command
+
+* 自定义输出
+
+```
+set(wrap_BLAS_LAPACK_sources
+  ${CMAKE_CURRENT_BINARY_DIR}/wrap_BLAS_LAPACK/CxxBLAS.hpp
+  ${CMAKE_CURRENT_BINARY_DIR}/wrap_BLAS_LAPACK/CxxBLAS.cpp
+  ${CMAKE_CURRENT_BINARY_DIR}/wrap_BLAS_LAPACK/CxxLAPACK.hpp
+  ${CMAKE_CURRENT_BINARY_DIR}/wrap_BLAS_LAPACK/CxxLAPACK.cpp
+  )
+```
+```
+add_custom_command(
+  OUTPUT
+      ${wrap_BLAS_LAPACK_sources}     #输出内容
+  COMMAND
+      ${CMAKE_COMMAND} -E tar xzf ${CMAKE_CURRENT_SOURCE_DIR}/wrap_BLAS_LAPACK.tar.gz  #通过执行命令生成输出
+  COMMAND
+      ${CMAKE_COMMAND} -E touch ${wrap_BLAS_LAPACK_sources}
+  WORKING_DIRECTORY
+      ${CMAKE_CURRENT_BINARY_DIR}   #命令的执行路径
+  DEPENDS
+      ${CMAKE_CURRENT_SOURCE_DIR}/wrap_BLAS_LAPACK.tar.gz #命令的依赖
+  COMMENT
+      "Unpacking C++ wrappers for BLAS/LAPACK"
+  VERBATIM
+  )
+```
+
+### add_custom_target
+```
+add_custom_target(BLAS_LAPACK_wrappers
+  WORKING_DIRECTORY
+      ${CMAKE_CURRENT_BINARY_DIR}
+  DEPENDS
+      ${MATH_SRCS}
+  COMMENT
+      "Intermediate BLAS_LAPACK_wrappers target"
+  VERBATIM
+  )
+```
+
+### add_dependencies(linear-algebra unpack)
+项目较大的时候 依赖较多，为了保证被依赖的项目在依赖项目之前构建，引入这个指令
+
+### target_include_directories
+为目标添加头文件搜索路径
+target_include_directories(linear-algebra
+          PRIVATE
+          ${CMAKE_CURRENT_SOURCE_DIR}/eigen-3.3.4)
+
+### target_sources
+add_library(math "")  #可以声明一个没有目标的源，然后用target_source来填充源
+target_sources(math
+  PRIVATE
+    ${CMAKE_CURRENT_BINARY_DIR}/wrap_BLAS_LAPACK/CxxBLAS.cpp
+    ${CMAKE_CURRENT_BINARY_DIR}/wrap_BLAS_LAPACK/CxxLAPACK.cpp
+  PUBLIC
+    ${CMAKE_CURRENT_BINARY_DIR}/wrap_BLAS_LAPACK/CxxBLAS.hpp
+    ${CMAKE_CURRENT_BINARY_DIR}/wrap_BLAS_LAPACK/CxxLAPACK.hpp
+  )
+
+
+### configure_file
+* configure_file(print_info.c.in print_info.c @ONLY)
+将print_info.c.in里面以@开头和结尾的值替换成设置的变量，并生成print_info.c文件
+
