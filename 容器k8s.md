@@ -321,3 +321,18 @@ informer通过ListAndWatch ，获取和监视变化
 
 ### operator
 operator=CRD+controller+webhook
+
+
+### service的规则
+service的基本工作原理
+service通过kube-proxy组件加iptables规则共同实现，一旦创建了serviceapi对象，他的informer就会感知到这种变化，对于这种事件的响应，就是创建相应的iptables规则，然后不断进行监听刷新，修改iptables规则，IPVS策略，
+
+IPVS策略，将对这些规则的处理放到了内核态，降低了维护规则的代价
+
+#### nodeport
+也是通过修改iptables规则
+#### LoadBalancer
+为公有云提供
+
+当你的 Service 没办法通过 DNS 访问到的时候。你就需要区分到底是 Service 本身的配置问题，还是集群的 DNS 出了问题。一个行之有效的方法，就是检查 Kubernetes 自己的 Master 节点的 Service DNS 是否正常
+$nslookup kubernetes.default
