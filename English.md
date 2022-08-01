@@ -75,3 +75,6 @@ would you please be quiet 请安静号码
 
 找不到我:
 would you please step back 请后退一点好吗
+
+that's how it is 就是这样
+that's what going on 就是这样

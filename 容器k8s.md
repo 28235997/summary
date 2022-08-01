@@ -15,6 +15,17 @@
 
 ## k8s
 k8s:网关、水平扩展、监控、备份、灾难恢复
+
+## k8s 架构
+master：api-server，etcd，controller-manager， scheduler
+slave：kubelet，kube-proxy
+
+api-server 负责通过api和外部集群进行交互，整个集群的数据中心和
+scheduler 通过api-server监听未被调度的pod(PodSpec.NodeName为空的pod)，为pod进行binding操作
+kubelet 定期向master节点上报本节点的pod的运行状态，控制节点的启动和停止，通过控制器模式，收集信息通过心跳上报给apiserver，就是通过watch监听nodeName是自己的pod，
+kube-proxy 负责负载均衡
+
+
  
 ### 为什么要使用pod P13
 - 这样一个场景：一个组件是一个进程组，比如rsyslogd，他需要三个进程，imklog imuxsock 和他的主进程，这三个必须在同一个节点，当不使用pod，在swarm调度时，调度两个之后发现第三个资源不够，则会启动失败，而用一个pod，里面有三个continer，则直接会选资源够的节点
@@ -336,3 +347,9 @@ IPVS策略，将对这些规则的处理放到了内核态，降低了维护规�
 
 当你的 Service 没办法通过 DNS 访问到的时候。你就需要区分到底是 Service 本身的配置问题，还是集群的 DNS 出了问题。一个行之有效的方法，就是检查 Kubernetes 自己的 Master 节点的 Service DNS 是否正常
 $nslookup kubernetes.default
+
+
+statefulset和deploy
+1. Headless Service 不需要分配一个 VIP，而是可以直接以 DNS 记录的方式解析出被代理 Pod 的 IP 地址。.
+2. Kubernetes 通过 Headless Service，为这些有编号的 Pod，在 DNS 服务器中生成带有同样编号的 DNS 记录
+3. StatefulSet 还为每一个 Pod 分配并创建一个同样编号的 PVC

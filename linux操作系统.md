@@ -185,5 +185,5 @@ sed -i 's/^\(字符串段1\).*\(字符串段2\)$/\1放入替换段1与段2之间
 
 set -o errexit <=> set -e  错误直接退出后面不再执行
 set -o xtrace <=> set -x   打印结果所对应的命令(一般用于调试跟踪)
-set -o nounset <=> set -u  变量为声明报错
+set -o nounset <=> set -u  变量未声明报错
 set -o pipefail  管道失败，直接退出
