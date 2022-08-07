@@ -12,7 +12,7 @@
 1. 一组联合挂载的rootfs，也就是挂载在/var/lib/docker/32fdbc686/diff下面的
 2. 一个由namespace和cgroup构成的隔离环境，这部分我们成为容器运行时
 
-
+因此，如果确实需要在一个Docker容器中运行多个进程，最先启动的命令进程应该是具有资源监控与回收等管理能力的，如bash。
 ## k8s
 k8s:网关、水平扩展、监控、备份、灾难恢复
  
@@ -191,148 +191,23 @@ kubectl rollout resume deployment/nginx-deployment
 3. StatefulSet还为每一个pod分配并创建一个同样编号的PVC
 
 
-## 声明式API，CRD  P24
-CRD，custom Resource Definition 
-### 写一个CRD
-先定义一个CRD的yaml文件，名字叫network.yaml
-```
+### kubernetes的默认调度器 P42
+#### k8s的调度机制，实际上是两层控制循环
+1. informer path，启动一系列informer，用来监听etcd中pod，node，service等与调度相关的api对象的变化，默认情况下，k8s的默认调度队列是一个优先级队列，
+此外还负责对调度器缓存进行更新，  其实最大的优化点原则就是将尽可能多将信息cache化，以便从根本上提高，Predicate 和 Priority 调度算法的执行效率。
+2. 调度器负责pod调度的主循环，我们称之为Scheduling Path，Predicate算法为pod选择节点，进行打分。完成之后就把pod对象的nodeName字段的值，替换成node名字
 
-apiVersion: apiextensions.k8s.io/v1beta1
-kind: CustomResourceDefinition
-metadata:
-  name: networks.samplecrd.k8s.io
-spec:
-  group: samplecrd.k8s.io
-  version: v1
-  names:
-    kind: Network
-    plural: networks
-  scope: Namespaced   #定义属于namespace 类似pod对象
- 
-```
-
-## PV,PVC,SC
-```
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: nfs
-spec:
-  storageClassName: manual
-  capacity:
-    storage: 1Gi
-  accessModes:
-    - ReadWriteMany
-  nfs:
-    server: 10.244.1.4
-    path: "/"
-```
-定义一个PV，pvc通常由开发人员创建，或者作为statefulset模板的一部分，由statefuleset控制器创建
-
-### storageclass
-但是100个pvc就需要100个pv，那么手动创建太麻烦，于是有了 sc
-手动创建pv被称为static Provisioning 静态供应
-sc被称为Dynamic Provisioning动态供应
-* 关键是这个字段：provisioner: ceph.rook.io/block 
-
-### PV持久化宿主机目录的两阶段操作
-1. 为虚拟机挂载远程磁盘，attach操作
-2. 将远程磁盘挂载到宿主机目录的操作，mount操作
+#### 控制器的调度策略 P43
 
 
+### 判断container和service的健康状态
+#### LivenessProbe探针
+* 判断容器是否存活，否则直接杀掉(running)容器
+#### ReadinessProbe探针
+用于判断服务是否可用，note：重点在被service管理的pod，如果不可用，则会将service的后端endpoint移除。
 
-### 自定义控制器CRD
-```
-func main() {
-	flag.Parse()
-
-	// set up signals so we handle the first shutdown signal gracefully
-	stopCh := signals.SetupSignalHandler()
-
-	cfg, err := clientcmd.BuildConfigFromFlags(masterURL, kubeconfig)
-	if err != nil {
-		glog.Fatalf("Error building kubeconfig: %s", err.Error())
-	}
-
-	kubeClient, err := kubernetes.NewForConfig(cfg)
-	if err != nil {
-		glog.Fatalf("Error building kubernetes clientset: %s", err.Error())
-	}
-
-	networkClient, err := clientset.NewForConfig(cfg)
-	if err != nil {
-		glog.Fatalf("Error building example clientset: %s", err.Error())
-	}
-
-	networkInformerFactory := informers.NewSharedInformerFactory(networkClient, time.Second*30)
-
-	controller := NewController(kubeClient, networkClient,
-		networkInformerFactory.Samplecrd().V1().Networks())
-
-	go networkInformerFactory.Start(stopCh)
-
-	if err = controller.Run(2, stopCh); err != nil {
-		glog.Fatalf("Error running controller: %s", err.Error())
-	}
-}
-
-func init() {
-	flag.StringVar(&kubeconfig, "kubeconfig", "", "Path to a kubeconfig. Only required if out-of-cluster.")
-	flag.StringVar(&masterURL, "master", "", "The address of the Kubernetes API server. Overrides any value in kubeconfig. Only required if out-of-cluster.")
-}
-```
-network CRD的main方法
-
-```
-func NewController(
-  kubeclientset kubernetes.Interface,
-  networkclientset clientset.Interface,
-  networkInformer informers.NetworkInformer) *Controller {
-  ...
-  controller := &Controller{
-    kubeclientset:    kubeclientset,
-    networkclientset: networkclientset,
-    networksLister:   networkInformer.Lister(),
-    networksSynced:   networkInformer.Informer().HasSynced,
-    workqueue:        workqueue.NewNamedRateLimitingQueue(...,  "Networks"),
-    ...
-  }
-    networkInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-    AddFunc: controller.enqueueNetwork,
-    UpdateFunc: func(old, new interface{}) {
-      oldNetwork := old.(*samplecrdv1.Network)
-      newNetwork := new.(*samplecrdv1.Network)
-      if oldNetwork.ResourceVersion == newNetwork.ResourceVersion {
-        return
-      }
-      controller.enqueueNetwork(new)
-    },
-    DeleteFunc: controller.enqueueNetworkForDelete,
- return controller
-}
-```
-
-#### informer
-自定义控制器的重要组件 informer，是一个带有本地缓存和索引机制的、可以注册 EventHandler 的 client，这里的EnventHandler包括delete，update，add
-
-informer通过ListAndWatch ，获取和监视变化
-
-手动实现一个crd
-
-### operator
-operator=CRD+controller+webhook
-
-
-### service的规则
-service的基本工作原理
-service通过kube-proxy组件加iptables规则共同实现，一旦创建了serviceapi对象，他的informer就会感知到这种变化，对于这种事件的响应，就是创建相应的iptables规则，然后不断进行监听刷新，修改iptables规则，IPVS策略，
-
-IPVS策略，将对这些规则的处理放到了内核态，降低了维护规则的代价
-
-#### nodeport
-也是通过修改iptables规则
-#### LoadBalancer
-为公有云提供
-
-当你的 Service 没办法通过 DNS 访问到的时候。你就需要区分到底是 Service 本身的配置问题，还是集群的 DNS 出了问题。一个行之有效的方法，就是检查 Kubernetes 自己的 Master 节点的 Service DNS 是否正常
-$nslookup kubernetes.default
+#### 实现方式
+他们均有三种实现方式
+1. ExecAction 在容器内部执行命令
+2. tcpsocket 
+3. httpget
