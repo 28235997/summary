@@ -15,6 +15,17 @@
 因此，如果确实需要在一个Docker容器中运行多个进程，最先启动的命令进程应该是具有资源监控与回收等管理能力的，如bash。
 ## k8s
 k8s:网关、水平扩展、监控、备份、灾难恢复
+
+## k8s 架构
+master：api-server，etcd，controller-manager， scheduler
+slave：kubelet，kube-proxy
+
+api-server 负责通过api和外部集群进行交互，整个集群的数据中心和
+scheduler 通过api-server监听未被调度的pod(PodSpec.NodeName为空的pod)，为pod进行binding操作
+kubelet 定期向master节点上报本节点的pod的运行状态，控制节点的启动和停止，通过控制器模式，收集信息通过心跳上报给apiserver，就是通过watch监听nodeName是自己的pod，
+kube-proxy 负责负载均衡
+
+
  
 ### 为什么要使用pod P13
 - 这样一个场景：一个组件是一个进程组，比如rsyslogd，他需要三个进程，imklog imuxsock 和他的主进程，这三个必须在同一个节点，当不使用pod，在swarm调度时，调度两个之后发现第三个资源不够，则会启动失败，而用一个pod，里面有三个continer，则直接会选资源够的节点
@@ -200,14 +211,128 @@ kubectl rollout resume deployment/nginx-deployment
 #### 控制器的调度策略 P43
 
 
-### 判断container和service的健康状态
-#### LivenessProbe探针
-* 判断容器是否存活，否则直接杀掉(running)容器
-#### ReadinessProbe探针
-用于判断服务是否可用，note：重点在被service管理的pod，如果不可用，则会将service的后端endpoint移除。
+## PV,PVC,SC
+```
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nfs
+spec:
+  storageClassName: manual
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteMany
+  nfs:
+    server: 10.244.1.4
+    path: "/"
+```
+定义一个PV，pvc通常由开发人员创建，或者作为statefulset模板的一部分，由statefuleset控制器创建
 
-#### 实现方式
-他们均有三种实现方式
-1. ExecAction 在容器内部执行命令
-2. tcpsocket 
-3. httpget
+### storageclass
+但是100个pvc就需要100个pv，那么手动创建太麻烦，于是有了 sc
+手动创建pv被称为static Provisioning 静态供应
+sc被称为Dynamic Provisioning动态供应
+* 关键是这个字段：provisioner: ceph.rook.io/block 
+
+### PV持久化宿主机目录的两阶段操作
+1. 为虚拟机挂载远程磁盘，attach操作
+2. 将远程磁盘挂载到宿主机目录的操作，mount操作
+
+
+
+### 自定义控制器CRD
+```
+func main() {
+	flag.Parse()
+
+	// set up signals so we handle the first shutdown signal gracefully
+	stopCh := signals.SetupSignalHandler()
+
+	cfg, err := clientcmd.BuildConfigFromFlags(masterURL, kubeconfig)
+	if err != nil {
+		glog.Fatalf("Error building kubeconfig: %s", err.Error())
+	}
+
+	kubeClient, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		glog.Fatalf("Error building kubernetes clientset: %s", err.Error())
+	}
+
+	networkClient, err := clientset.NewForConfig(cfg)
+	if err != nil {
+		glog.Fatalf("Error building example clientset: %s", err.Error())
+	}
+
+	networkInformerFactory := informers.NewSharedInformerFactory(networkClient, time.Second*30)
+
+	controller := NewController(kubeClient, networkClient,
+		networkInformerFactory.Samplecrd().V1().Networks())
+
+	go networkInformerFactory.Start(stopCh)
+
+	if err = controller.Run(2, stopCh); err != nil {
+		glog.Fatalf("Error running controller: %s", err.Error())
+	}
+}
+
+func init() {
+	flag.StringVar(&kubeconfig, "kubeconfig", "", "Path to a kubeconfig. Only required if out-of-cluster.")
+	flag.StringVar(&masterURL, "master", "", "The address of the Kubernetes API server. Overrides any value in kubeconfig. Only required if out-of-cluster.")
+}
+```
+network CRD的main方法
+
+```
+func NewController(
+  kubeclientset kubernetes.Interface,
+  networkclientset clientset.Interface,
+  networkInformer informers.NetworkInformer) *Controller {
+  ...
+  controller := &Controller{
+    kubeclientset:    kubeclientset,
+    networkclientset: networkclientset,
+    networksLister:   networkInformer.Lister(),
+    networksSynced:   networkInformer.Informer().HasSynced,
+    workqueue:        workqueue.NewNamedRateLimitingQueue(...,  "Networks"),
+    ...
+  }
+    networkInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+    AddFunc: controller.enqueueNetwork,
+    UpdateFunc: func(old, new interface{}) {
+      oldNetwork := old.(*samplecrdv1.Network)
+      newNetwork := new.(*samplecrdv1.Network)
+      if oldNetwork.ResourceVersion == newNetwork.ResourceVersion {
+        return
+      }
+      controller.enqueueNetwork(new)
+    },
+    DeleteFunc: controller.enqueueNetworkForDelete,
+ return controller
+}
+```
+
+#### informer
+自定义控制器的重要组件 informer，是一个带有本地缓存和索引机制的、可以注册 EventHandler 的 client，这里的EnventHandler包括delete，update，add
+
+informer通过ListAndWatch ，获取和监视变化
+
+手动实现一个crd
+
+### operator
+operator=CRD+controller+webhook
+
+
+### service的规则
+service的基本工作原理
+service通过kube-proxy组件加iptables规则共同实现，一旦创建了serviceapi对象，他的informer就会感知到这种变化，对于这种事件的响应，就是创建相应的iptables规则，然后不断进行监听刷新，修改iptables规则，IPVS策略，
+
+IPVS策略，将对这些规则的处理放到了内核态，降低了维护规则的代价
+
+#### nodeport
+也是通过修改iptables规则
+#### LoadBalancer
+为公有云提供
+
+当你的 Service 没办法通过 DNS 访问到的时候。你就需要区分到底是 Service 本身的配置问题，还是集群的 DNS 出了问题。一个行之有效的方法，就是检查 Kubernetes 自己的 Master 节点的 Service DNS 是否正常
+$nslookup kubernetes.default
