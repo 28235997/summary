@@ -1,0 +1,153 @@
+pipeline{
+    agent any
+    environment {
+      NAME= "bdc-app-academy"
+      DOCKER_FILE= "deploy/docker/Dockerfile"
+      REPO_DOMAIN= "ccr.ccs.tencentyun.com/bigdata-product"
+      BUILD_TIME = sh(script: "echo `date +%Y%m%d%H%M`", returnStdout: true).trim()
+      GIT_URL = "http://gitlab.wanda.cn/beyonds/backend/data/dc/bdc-app-academy.git"
+      DESCRIPTION = "商业视界系统"
+      WEBHOOK_COMMON_URL = "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=6b0a77fb-c72b-4dbc-8c34-dd65bebe6612"
+      WEBHOOK_PROD_URL = "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=110b8969-c20f-4f9f-a54f-b409258e7afe"
+      USER_LIST = "<@yangjinxia>"
+      SONARQUBE_URL = "http://sonarqube.intra.sit.beyonds.gw/dashboard?id=${NAME}&branch=${branch}"
+      SONAR_SOURCES = "voyager-miniSearch-api/src,voyager-miniSearch-domain/src,voyager-miniSearch-model/src,voyager-miniSearch-service/src,voyager-miniSearch-web/src,voyager-miniSearch-timer/src"
+    }
+    tools {
+      jdk 'jdk8'
+    }
+    options {
+      skipDefaultCheckout()
+      timestamps()
+      timeout(time: 30, unit: 'MINUTES')
+      buildDiscarder(logRotator(daysToKeepStr: '30', numToKeepStr: '7'))
+    }
+    stages {
+        stage('Checkout'){
+          steps {
+                checkout([$class: 'GitSCM', branches: [[name: "${branch}"]], extensions: [[$class: 'CleanBeforeCheckout']], userRemoteConfigs: [[credentialsId: 'wanda-gitlab', url: "${GIT_URL}"]]])
+          }
+        }
+        stage('Preparation') {
+          steps {
+            dir("${env.WORKSPACE}") {
+              script{
+                  env.GIT_SHA_SHORT = sh(
+                  script: "git rev-parse --short=8 HEAD",
+                  returnStdout: true
+                  ).trim()
+
+                  if ("${ENV}" == "prod") {
+                    env.WEBHOOKS = "${WEBHOOK_COMMON_URL} ${WEBHOOK_PROD_URL}"
+                  }
+                  else {
+                    env.WEBHOOKS = "${WEBHOOK_COMMON_URL}"
+                  }
+                  
+                  env.DOCKER_TAG = "${BUILD_TIME}-${ENV}-${GIT_SHA_SHORT}"
+                  env.DOCKER_NAME = "${NAME}-${ENV}"
+              }
+            }  
+          }          
+        }
+        stage("SonarQube analysis") {
+          tools {  
+            maven 'maven'
+          }
+          steps {
+            script {
+              env.sonarqubeScannerHome = tool 'SonarScanner'
+            }
+            withSonarQubeEnv('sonarqube') {
+              sh'''
+                mvn clean package -Denv=${ENV} -DskipTests=true -U
+                ${sonarqubeScannerHome}/bin/sonar-scanner -Dsonar.projectKey=${NAME} -Dsonar.projectName=${NAME} -Dsonar.branch.name=master -Dsonar.sources=${SONAR_SOURCES} -Dsonar.java.binaries=**/target/classes
+              '''
+            }  
+          }
+        }
+        stage("Quality Gate") {
+          steps {
+              timeout(time: 10, unit: 'MINUTES') {
+                  waitForQualityGate abortPipeline: false
+              }
+              script{
+                env.SONAR_STATUS = waitForQualityGate().status
+              }
+          }
+        }
+        stage('Build') {
+          environment {
+            DOCKER_REGISTER_CRED = credentials('docker-register')
+          }
+          steps {  
+              sh '''
+              echo ${DOCKER_TAG}
+              docker login -u ${DOCKER_REGISTER_CRED_USR} -p ${DOCKER_REGISTER_CRED_PSW} ${REPO_DOMAIN}
+              docker build -t "${REPO_DOMAIN}/${DOCKER_NAME}:${DOCKER_TAG}" -f ${DOCKER_FILE} .
+              docker push "${REPO_DOMAIN}/${DOCKER_NAME}:${DOCKER_TAG}"     
+              '''               
+          }
+        }
+        stage('Delete old image') {
+          steps {
+            script{
+                env.IMAGE_NUM = sh(
+                script: 'docker images | grep -w "${REPO_DOMAIN}/${DOCKER_NAME}" | grep ${DOCKER_TAG} | awk \'{print $3}\' | wc -l',
+                returnStdout: true
+                ).trim()
+            }
+            sh '''
+            docker images | grep -w "${REPO_DOMAIN}/${DOCKER_NAME}" | grep ${DOCKER_TAG}
+
+            if [ $IMAGE_NUM != 0 ]
+              then
+                for i in `docker images | grep -w "${REPO_DOMAIN}/${DOCKER_NAME}" | grep ${DOCKER_TAG} | awk '{print $3}'`;do docker rmi $i;done
+              else
+                echo "No images can be delete!!"
+            fi
+            '''
+          }
+        }
+    }
+    post{
+        success{
+          notify_success()  
+        }
+
+        failure{
+          notify_failure()
+        }
+    }
+}
+// def notify_success() {
+//   sh '''
+//   for webhook in ${WEBHOOKS[@]};do
+//     curl "${webhook}" \
+//            -H 'Content-Type: application/json' \
+//            -d '
+//            {
+//                 "msgtype": "markdown",
+//                 "markdown": {
+//                     "content": "项目名称：<font color=\'info\'>**'"${JOB_NAME}"'**</font> \nDescription：'"${DESCRIPTION}"' \n环境：'"${ENV}"' \n分支：'"${branch}"' \n镜像版本号：'"${DOCKER_TAG}"' \nJenkins构建地址： ['"${BUILD_URL}"']('"${BUILD_URL}"') \nSonarqube地址：['"${SONARQUBE_URL}"']('"${SONARQUBE_URL}"') \nSonar代码检测质量：'"${SONAR_STATUS}"' \n<font color=\'info\'>**项目构建成功**</font> \n'"${USER_LIST}"'"
+//                 }
+//            }'
+//   done
+//   '''
+// }
+// def notify_failure() {
+//   sh '''
+//   for webhook in ${WEBHOOKS[@]};do
+//     curl "${webhook}" \
+//            -H 'Content-Type: application/json' \
+//            -d '
+//            {
+//                 "msgtype": "markdown",
+//                 "markdown": {
+//                     "content": "项目名称：<font color=\'warning\'>**'"${JOB_NAME}"'**</font> \nDescription：'"${DESCRIPTION}"' \n环境：'"${ENV}"' \n分支：'"${branch}"' \n镜像版本号：'"${DOCKER_TAG}"' \nJenkins构建地址: ['"${BUILD_URL}"']('"${BUILD_URL}"') \nSonarqube地址：['"${SONARQUBE_URL}"']('"${SONARQUBE_URL}"') \nSonar代码检测质量：'"${SONAR_STATUS}"' \n<font color=\'warning\'>**项目构建失败请查看日志！！**</font> \n'"${USER_LIST}"'"
+//                 }
+//            }'
+//   done
+//   '''  
+// }
+
