@@ -60,7 +60,9 @@ merge 再修改完冲突后得提交一次，作为解决冲突的提交，
 - git rebase --continue
 - 完成
 
-3. git merge 当没有分叉时默认进行快进式合并，只移动指针，会把这些commit都带着，除非加 git merge --no-ff显示禁止，但是当有分歧，则无法进行快进式合并，则会生成一个merge提交。
+3. git merge 当没有分叉时默认进行快进式合并，只移动指针，会把这些commit都带着，除非加 git merge --no-ff显示禁止，但是当有分歧，则无法进行快进式合并，则会生成一个merge提交。不过两个分支的各自新增加的提交还是会带过来
+
+
 
 ## 压缩提交
 <img alt="commit_squash-8d1b6290.png" src="assets/commit_squash-8d1b6290.png" width="" height="" >
