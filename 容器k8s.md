@@ -22,7 +22,7 @@ slave：kubelet，kube-proxy
 
 api-server 负责通过api和外部集群进行交互，整个集群的数据中心和
 scheduler 通过api-server监听未被调度的pod(PodSpec.NodeName为空的pod)，为pod进行binding操作
-kubelet 定期向master节点上报本节点的pod的运行状态，控制节点的启动和停止，通过控制器模式，收集信息通过心跳上报给apiserver，就是通过watch监听nodeName是自己的pod，
+kubelet 定期向master节点上报本节点的pod的运行状态，控制节点的启动和停止，通过控制器模式，收集 信息通过心跳上报给apiserver，就是通过watch监听nodeName是自己的pod，
 kube-proxy 负责负载均衡
 
 

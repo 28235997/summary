@@ -224,3 +224,5 @@ please don't hesitate to ask me any questions 请不要犹豫问我任何问题
 it is pity that很遗憾
 it is pity that he has no sense of humor  很遗憾，他没有幽默感
 i don't see why you 我不明白你为什么
+espouse 支持，嫁娶
+engage

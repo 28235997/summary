@@ -181,7 +181,7 @@ iptables -I INPUT -ptcp --dport 3000 -j ACCEPT
 
 * 字符串替换
 sed -i 's/^\(字符串段1\).*\(字符串段2\)$/\1放入替换段1与段2之间的内容\2/' filename
-
+sed -i "s/172.19.200.52/172.24.40.123/g" `grep -rl --include='*' --exclude='*.log' --exclude='*.out' '172.19.200.52' .`
 
 set -o errexit <=> set -e  错误直接退出后面不再执行
 set -o xtrace <=> set -x   打印结果所对应的命令(一般用于调试跟踪)
