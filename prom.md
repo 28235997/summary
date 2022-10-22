@@ -80,6 +80,7 @@ rate(node_network_transimit_bytes[1m]) /1024/1024
 安装：github中下载安装
 
 ### ⽤于抓取 TCP waiting_connection 瞬时数量
+```
 #!/bin/bash
 instance_name=`hostname -f | cut -d'.' -f1` #本机机器名 变量⽤于之后的 标签
 if [ $instance_name == "localhost" ];then # 要求机器名 不能是localhost 不然标签就没有区分了
@@ -93,7 +94,7 @@ count_netstat_wait_connections=`netstat -an | grep -i wait | wc -l`
 echo "$label : $count_netstat_wait_connections"
 echo "$label $count_netstat_wait_connections"  | curl --data-binary @- http://prometheus.server.com:9091/metrics/job/
 pushgateway1/instance/$instance_name
-
+```
 
 promserver端关于pushgateway的配置
 - job_name: 'pushgateway'
