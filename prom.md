@@ -97,6 +97,6 @@ pushgateway1/instance/$instance_name
 ```
 
 promserver端关于pushgateway的配置
-- job_name: 'pushgateway'
+- job_name: 'pushgateway' 
   static_configs:
     - targets: ['localhost:9091', 'localhost:9092']
